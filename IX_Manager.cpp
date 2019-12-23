@@ -527,7 +527,7 @@ void insert_index(IX_IndexHandle* indexHandle, PageNum target, const char* key, 
 
 		if (targetNode.node_info.keynum == indexHandle->fileHeader.order)
 		{
-			/*叶节点已满，需要分裂节点*/
+			/*节点已满，需要分裂节点*/
 			IX_DataNode newNode;
 			create_node(indexHandle, target, &targetNode, &newNode);
 
