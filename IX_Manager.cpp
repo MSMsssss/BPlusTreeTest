@@ -330,6 +330,12 @@ inline char* getKey(IX_IndexHandle* indexHandle, IX_DataNode* dataNode, int inde
 	return dataNode->node_info.keys + indexHandle->fileHeader.keyLength * index;
 }
 
+/*获得dataNode RID数组index处的指针*/
+inline RID* getRID(IX_DataNode* dataNode, int index)
+{
+	return dataNode->node_info.rids + index;
+}
+
 /*索引项赋值*/
 void assignment(IX_IndexHandle* indexHandle, IX_DataNode* dataNode, int index, const char* key, const RID* rid)
 {
@@ -733,8 +739,8 @@ bool borrow_key_index(IX_IndexHandle* indexHandle, bool from_right, IX_DataNode*
 	return true;
 }
 
-/*合并叶子节点*/
-void merge_leaf(IX_IndexHandle* indexHandle, IX_DataNode* left, IX_DataNode* right)
+/*合并节点*/
+void merge_node(IX_IndexHandle* indexHandle, IX_DataNode* left, IX_DataNode* right)
 {
 	copy(getKey(indexHandle, right, 0),
 		getKey(indexHandle, right, right->node_info.keynum),
@@ -752,6 +758,12 @@ void merge_leaf(IX_IndexHandle* indexHandle, IX_DataNode* left, IX_DataNode* rig
 /*从内部节点删除数据*/
 void remove_from_index(IX_IndexHandle* indexHandle, PageNum target, IX_DataNode* targetNode, const char* key)
 {
+	int min_order = (target == indexHandle->fileHeader.rootPage) ? 2 : halfOrder(indexHandle->fileHeader.order);
+	char* index_key = (char*)malloc(indexHandle->fileHeader.keyLength);
+	if (index_key == NULL)
+		exit(-1);
+
+	memcpy(index_key, getKey(indexHandle, targetNode, 0), indexHandle->fileHeader.keyLength);
 	int index = upper_bound(indexHandle, targetNode, key, 0, targetNode->node_info.keynum - 1);
 	targetNode->node_info.rids[index + 1] = targetNode->node_info.rids[index];
 	copy_node(indexHandle, targetNode, index + 1, targetNode->node_info.keynum, index);
@@ -767,8 +779,65 @@ void remove_from_index(IX_IndexHandle* indexHandle, PageNum target, IX_DataNode*
 		DisposePage(&indexHandle->fileHandle, indexHandle->fileHeader.rootPage);
 		indexHandle->fileHeader.rootPage = targetNode->node_info.rids[0].pageNum;
 		--indexHandle->fileHeader.height;
+
 		flashHeaderToDisk(indexHandle);
+		free(index_key);
+
+		return;
 	}
+
+	if (targetNode->node_info.keynum < min_order)
+	{
+		bool borrowed = false;
+		IX_DataNode parentNode;
+		map(indexHandle, &parentNode, targetNode->node_info.parent);
+		/*向右借用*/
+		if (target != getRID(&parentNode, parentNode.node_info.keynum - 1)->pageNum)
+		{
+			borrowed = borrow_key_index(indexHandle, true, targetNode, target);
+		}
+
+		/*向左借用*/
+		if (!borrowed && target != getRID(&parentNode, 0)->pageNum)
+		{
+			borrowed = borrow_key_index(indexHandle, false, targetNode, target);
+		}
+
+		/*借用失败则合并节点*/
+		if (!borrowed)
+		{
+			/*向右合并*/
+			if (target != getRID(&parentNode, parentNode.node_info.keynum - 1)->pageNum)
+			{
+				int next = targetNode->node_info.next;
+				IX_DataNode nextNode;
+				map(indexHandle, &nextNode, next);
+
+				merge_node(indexHandle, targetNode, &nextNode);
+				remove_node(indexHandle, targetNode, &nextNode);
+				unmap(indexHandle, targetNode, target);
+			}
+			else //向左合并
+			{
+				int prev = targetNode->node_info.prev;
+				IX_DataNode prevNode;
+				map(indexHandle, &prevNode, prev);
+				memcpy(index_key, getKey(indexHandle, &prevNode, 0), indexHandle->fileHeader.keyLength);
+
+				merge_node(indexHandle, &prevNode, targetNode);
+				remove_node(indexHandle, &prevNode, targetNode);
+				unmap(indexHandle, &prevNode, prev);
+			}
+
+			remove_from_index(indexHandle, targetNode->node_info.parent, &parentNode, index_key);
+		}
+		else
+			unmap(indexHandle, targetNode, target);
+	}
+	else
+		unmap(indexHandle, targetNode, target);
+
+	free(index_key);
 }
 
 RC OpenIndexScan(IX_IndexScan *indexScan,IX_IndexHandle *indexHandle,CompOp compOp,char *value){
@@ -1239,7 +1308,7 @@ RC DeleteEntry(IX_IndexHandle* indexHandle, void* pData, const RID* rid)
 					map(indexHandle, &brotherNode, targetNode.node_info.prev);
 					memcpy(index_key, getKey(indexHandle, &brotherNode, 0), indexHandle->fileHeader.keyLength);
 
-					merge_leaf(indexHandle, &brotherNode, &targetNode);
+					merge_node(indexHandle, &brotherNode, &targetNode);
 					remove_node(indexHandle, &brotherNode, &targetNode);
 					unmap(indexHandle, &brotherNode, targetNode.node_info.prev);
 				}
@@ -1249,7 +1318,7 @@ RC DeleteEntry(IX_IndexHandle* indexHandle, void* pData, const RID* rid)
 					map(indexHandle, &brotherNode, targetNode.node_info.next);
 					memcpy(index_key, getKey(indexHandle, &targetNode, 0), indexHandle->fileHeader.keyLength);
 
-					merge_leaf(indexHandle, &targetNode, &brotherNode);
+					merge_node(indexHandle, &targetNode, &brotherNode);
 					remove_node(indexHandle, &targetNode, &brotherNode);
 					unmap(indexHandle, &targetNode, target);
 				}
