@@ -666,6 +666,70 @@ bool borrow_key(IX_IndexHandle* indexHandle, bool from_right, IX_DataNode* borro
 /*内部节点借用关键字*/
 bool borrow_key_index(IX_IndexHandle* indexHandle, bool from_right, IX_DataNode* borrowerNode, PageNum offset)
 {
+	PageNum lender = from_right ? borrowerNode->node_info.next : borrowerNode->node_info.prev;
+	if (lender == 0)
+		return false;
+
+	IX_DataNode lenderNode;
+	map(indexHandle, &lenderNode, lender);
+
+	if (lenderNode.node_info.keynum <= halfOrder(indexHandle->fileHeader.order))
+		return false;
+
+	int where_to_lend, where_to_put;
+	if (from_right)
+	{
+		where_to_lend = 0;
+		where_to_put = borrowerNode->node_info.keynum;
+
+		IX_DataNode parentNode;
+		map(indexHandle, &parentNode, borrowerNode->node_info.parent);
+
+		int index = lower_bound(indexHandle, &parentNode, 
+			getKey(indexHandle, borrowerNode, borrowerNode->node_info.keynum - 1), 
+			0, parentNode.node_info.keynum - 1);
+
+		memcpy(getKey(indexHandle, &parentNode, index), 
+			getKey(indexHandle, &lenderNode, where_to_lend), 
+			indexHandle->fileHeader.keyLength);
+
+		unmap(indexHandle, &parentNode, borrowerNode->node_info.parent);
+	}
+	else
+	{
+		where_to_lend = lenderNode.node_info.keynum - 1;
+		where_to_put = 0;
+
+		IX_DataNode parentNode;
+		map(indexHandle, &parentNode, lenderNode.node_info.parent);
+
+		int index = upper_bound(indexHandle, &parentNode, 
+			getKey(indexHandle, &lenderNode, 0), 
+			0, parentNode.node_info.keynum - 1);
+
+		memcpy(getKey(indexHandle, &parentNode, index),
+			getKey(indexHandle, &lenderNode, where_to_lend - 1),
+			indexHandle->fileHeader.keyLength);
+
+		unmap(indexHandle, &parentNode, borrowerNode->node_info.parent);
+	}
+
+	/*放置*/
+	copy_backward_node(indexHandle, borrowerNode, where_to_put,
+		borrowerNode->node_info.keynum, borrowerNode->node_info.keynum + 1);
+
+	assignment(indexHandle, borrowerNode, where_to_put,
+		getKey(indexHandle, &lenderNode, where_to_lend), &lenderNode.node_info.rids[where_to_lend]);
+	++borrowerNode->node_info.keynum;
+
+	/*更新借用节点的parent*/
+	reset_children_parent(indexHandle, &lenderNode, where_to_lend, where_to_lend + 1, offset);
+
+	/*删除*/
+	copy_node(indexHandle, &lenderNode, where_to_lend + 1, lenderNode.node_info.keynum, where_to_lend);
+	--lenderNode.node_info.keynum;
+	unmap(indexHandle, &lenderNode, lender);
+
 	return true;
 }
 
@@ -688,7 +752,23 @@ void merge_leaf(IX_IndexHandle* indexHandle, IX_DataNode* left, IX_DataNode* rig
 /*从内部节点删除数据*/
 void remove_from_index(IX_IndexHandle* indexHandle, PageNum target, IX_DataNode* targetNode, const char* key)
 {
+	int index = upper_bound(indexHandle, targetNode, key, 0, targetNode->node_info.keynum - 1);
+	targetNode->node_info.rids[index + 1] = targetNode->node_info.rids[index];
+	copy_node(indexHandle, targetNode, index + 1, targetNode->node_info.keynum, index);
+	--targetNode->node_info.keynum;
 
+	if (target == indexHandle->fileHeader.rootPage && targetNode->node_info.keynum == 1)
+	{
+		IX_DataNode newRoot;
+		map(indexHandle, &newRoot, targetNode->node_info.rids[0].pageNum);
+		newRoot.node_info.parent = 0;
+		unmap(indexHandle, &newRoot, targetNode->node_info.rids[0].pageNum);
+
+		DisposePage(&indexHandle->fileHandle, indexHandle->fileHeader.rootPage);
+		indexHandle->fileHeader.rootPage = targetNode->node_info.rids[0].pageNum;
+		--indexHandle->fileHeader.height;
+		flashHeaderToDisk(indexHandle);
+	}
 }
 
 RC OpenIndexScan(IX_IndexScan *indexScan,IX_IndexHandle *indexHandle,CompOp compOp,char *value){
