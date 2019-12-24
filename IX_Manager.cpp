@@ -1,5 +1,9 @@
 #include "IX_Manager.h"
 #include <string.h>
+#pragma warning(disable : 4996)
+
+const bool TEST_MODE = true;
+const int MAX_FILE_NAME_LEN = 128;
 
 inline int halfOrder(int order)
 {
@@ -840,10 +844,7 @@ void remove_from_index(IX_IndexHandle* indexHandle, PageNum target, IX_DataNode*
 	free(index_key);
 }
 
-RC OpenIndexScan(IX_IndexScan *indexScan,IX_IndexHandle *indexHandle,CompOp compOp,char *value){
-	if (indexScan->bOpen)
-		return SUCCESS;
-	
+RC OpenIndexScan(IX_IndexScan *indexScan,IX_IndexHandle *indexHandle,CompOp compOp,char *value){	
 	if (!indexHandle->bOpen)
 		return FAIL;
 
@@ -1070,11 +1071,17 @@ RC CloseIndexScan(IX_IndexScan *indexScan){
 }
 
 RC GetIndexTree(char *fileName, Tree *index){
+
+
+
 	return SUCCESS;
 }
 
-RC CreateIndex(char* fileName, AttrType attrType, int attrLength)
+RC CreateIndex(const char* _fileName, AttrType attrType, int attrLength)
 {
+	char fileName[MAX_FILE_NAME_LEN];
+	strcpy(fileName, _fileName);
+
 	/*为索引创建分页文件,并打开*/
 	CreateFile(fileName);
 	PF_FileHandle fileHandle;
@@ -1088,13 +1095,13 @@ RC CreateIndex(char* fileName, AttrType attrType, int attrLength)
 
 	if (rootPageNum != 1)
 		return FAIL;
-
+		
 	/*初始化索引控制信息*/
 	IX_FileHeader header;
 	header.attrLength = attrLength;
 	header.attrType = attrType;
 	header.keyLength = attrLength + sizeof(RID);
-	header.order = (PF_PAGE_SIZE - sizeof(IX_FileHeader) - sizeof(IX_Node)) / (2 * sizeof(RID) + attrLength);
+	header.order = TEST_MODE ? 8 : (PF_PAGE_SIZE - sizeof(IX_FileHeader) - sizeof(IX_Node)) / (2 * sizeof(RID) + attrLength);
 	header.height = 1;
 	header.rootPage = rootPageNum;
 	header.first_leaf = rootPageNum;
@@ -1121,23 +1128,25 @@ RC CreateIndex(char* fileName, AttrType attrType, int attrLength)
 
 	MarkDirty(&rootPageHandle);
 	UnpinPage(&rootPageHandle);
+	CloseFile(&fileHandle);
 
 	return SUCCESS;
 }
 
-RC OpenIndex(char* fileName, IX_IndexHandle* indexHandle)
+RC OpenIndex(const char* _fileName, IX_IndexHandle* indexHandle)
 {
-	PF_FileHandle fileHandle;
-	if (openFile(fileName, &fileHandle) == SUCCESS)
+	char fileName[MAX_FILE_NAME_LEN];
+	strcpy(fileName, _fileName);
+
+	if (openFile(fileName, &indexHandle->fileHandle) == SUCCESS)
 	{
 		indexHandle->bOpen = true;
-		indexHandle->fileHandle = fileHandle;
 
 		/*获得索引控制信息*/
 		PF_PageHandle pageHandle;
 		char* pData;
 
-		GetThisPage(&fileHandle, 1, &pageHandle);
+		RC rtn = GetThisPage(&indexHandle->fileHandle, 1, &pageHandle);
 		GetData(&pageHandle, &pData);
 		memcpy(&indexHandle->fileHeader, pData, sizeof(IX_FileHeader));
 
@@ -1335,4 +1344,23 @@ RC DeleteEntry(IX_IndexHandle* indexHandle, void* pData, const RID* rid)
 	}
 
 	return SUCCESS;
+}
+
+void printList(IX_IndexHandle* indexHandle)
+{
+	PageNum leaf = indexHandle->fileHeader.first_leaf;
+	IX_DataNode leafNode;
+	while (leaf != 0)
+	{
+		map(indexHandle, &leafNode, leaf);
+		printNode(indexHandle, &leafNode);
+		printf("\n");
+		leaf = leafNode.node_info.next;
+	}
+}
+
+void printNode(IX_IndexHandle* indexHandle, IX_DataNode* dataNode)
+{
+	for (int i = 0; i < dataNode->node_info.keynum; ++i)
+		printf("%d ", *((int*)getKey(indexHandle, dataNode, i)));
 }

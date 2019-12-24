@@ -85,9 +85,11 @@ int lower_bound(IX_IndexHandle* indexHandle, IX_DataNode* dataNode, const char* 
 /*返回首个大于key的元素的指针，若没有则返回尾指针*/
 int upper_bound(IX_IndexHandle* indexHandle, IX_DataNode* dataNode, const char* key, int begin, int end);
 
+void printNode(IX_IndexHandle* indexHandle, IX_DataNode* dataNode);
+void printList(IX_IndexHandle* indexHandle);
 
-RC CreateIndex(char * fileName,AttrType attrType,int attrLength);
-RC OpenIndex(char *fileName,IX_IndexHandle *indexHandle);
+RC CreateIndex(const char * fileName,AttrType attrType,int attrLength);
+RC OpenIndex(const char *fileName,IX_IndexHandle *indexHandle);
 RC CloseIndex(IX_IndexHandle *indexHandle);
 
 RC InsertEntry(IX_IndexHandle *indexHandle,void *pData,const RID * rid);
