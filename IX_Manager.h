@@ -73,6 +73,8 @@ typedef struct{
 
 /*¸¨Öúº¯Êý*/
 
+RC map(IX_IndexHandle* indexHandle, IX_DataNode* dataNode, PageNum pageNum);
+
 /*·µ»Ørid1 < rid2*/
 bool rid_cmp(const RID* rid1, const RID* rid2);
 

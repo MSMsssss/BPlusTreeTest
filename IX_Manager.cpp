@@ -316,6 +316,7 @@ PageNum search_leaf_with_parent(IX_IndexHandle* indexHandle, PageNum parent, con
 {
 	IX_DataNode parentNode;
 	map(indexHandle, &parentNode, parent);
+	//printNode(indexHandle, &parentNode);
 	int index = upper_bound(indexHandle, &parentNode, key, 0, parentNode.node_info.keynum - 1);
 
 	return parentNode.node_info.rids[index].pageNum;
@@ -484,6 +485,7 @@ void insert_index_no_split(IX_IndexHandle* indexHandle, IX_DataNode* dataNode, c
 	memcpy(getKey(indexHandle, dataNode, index), key, indexHandle->fileHeader.keyLength);
 	dataNode->node_info.rids[index] = dataNode->node_info.rids[index + 1];
 	dataNode->node_info.rids[index + 1] = *rid;
+	++dataNode->node_info.keynum;
 }
 
 /*设置节点[begin, end)范围内的子节点的parent*/
@@ -1176,11 +1178,10 @@ RC InsertEntry(IX_IndexHandle* indexHandle, void* pData, const RID* rid)
 
 	IX_FileHeader* fileHeader = &indexHandle->fileHeader;
 	char* key = (char*)malloc(fileHeader->keyLength);
+	initKey(key, (char*)pData, indexHandle->fileHeader.attrLength, rid->pageNum, rid->slotNum);
+
 	if (key != NULL)
 	{
-		memcpy(key, pData, fileHeader->attrLength);
-		memcpy(key + fileHeader->attrLength, rid, sizeof(RID));
-
 		PageNum leafPageNum;
 		IX_DataNode leafNode;
 		if (indexHandle->fileHeader.height == 1)
