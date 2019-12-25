@@ -5,6 +5,8 @@
 bool TEST_MODE = true;
 const int MAX_FILE_NAME_LEN = 128;
 
+
+
 inline int halfOrder(int order)
 {
 	return order / 2;
@@ -868,8 +870,45 @@ RC OpenIndexScan(IX_IndexScan *indexScan,IX_IndexHandle *indexHandle,CompOp comp
 		GreatT,			//">"           5
 		NO_OP
 	*/
+	if (compOp == NEqual)
+	{
+		char* key = (char*)malloc(indexHandle->fileHeader.keyLength);
+		if (key == NULL)
+			return FAIL;
 
-	if (compOp == EQual || compOp == GEqual || compOp == GreatT || compOp == NEqual)
+		initKey(key, value, indexHandle->fileHeader.attrLength, (PageNum)0xffffffff, (SlotNum)0x7fffffff);
+
+		int target;
+		if (indexHandle->fileHeader.height == 1)
+			target = indexHandle->fileHeader.rootPage;
+		else
+			target = search_leaf(indexHandle, key);
+
+		IX_DataNode targetNode;
+		map(indexHandle, &targetNode, target);
+
+		/*在不等于操作中，扫描的序列实际被属性值相等的部分分割为两个序列，因此需要额外保存第二段序列的初始位置*/
+		indexScan->pnNext = indexHandle->fileHeader.first_leaf;
+		indexScan->ridIx = 0;
+		map(indexHandle, &indexScan->currentNode, indexScan->pnNext);
+
+		/*确定第二段序列的初始位置*/
+		int index = upper_bound(indexHandle, &targetNode, key, 0, targetNode.node_info.keynum);
+		if (index == targetNode.node_info.keynum)
+		{
+			/*如果索引为节点的结尾，则定位到下一节点的开始位置*/
+			indexScan->pnSkip = targetNode.node_info.next;
+			indexScan->ridIxSkip = 0;
+		}
+		else
+		{
+			indexScan->pnSkip = target;
+			indexScan->ridIxSkip = index;
+		}
+
+		free(key);
+	}
+	else if (compOp == EQual || compOp == GEqual || compOp == GreatT)
 	{
 		char* key = (char*)malloc(indexHandle->fileHeader.keyLength);
 		if (key == NULL)
@@ -878,7 +917,7 @@ RC OpenIndexScan(IX_IndexScan *indexScan,IX_IndexHandle *indexHandle,CompOp comp
 		/* 将RID初始化为最小值，可定位到属性值为value的序列的最左侧；
 		** 将RID初始化为最大值，可定位到属性值为value的序列的最右侧
 		*/
-		if(compOp == GreatT || compOp == NEqual)
+		if (compOp == GreatT)
 			initKey(key, value, indexHandle->fileHeader.attrLength, (PageNum)0xffffffff, (SlotNum)0x7fffffff);
 		else
 			initKey(key, value, indexHandle->fileHeader.attrLength, 0, 0);
@@ -888,47 +927,23 @@ RC OpenIndexScan(IX_IndexScan *indexScan,IX_IndexHandle *indexHandle,CompOp comp
 			target = indexHandle->fileHeader.rootPage;
 		else
 			target = search_leaf(indexHandle, key);
-		IX_DataNode targetNode;
-		map(indexHandle, &targetNode, target);
 
-		int index = upper_bound(indexHandle, &targetNode, key, 0, targetNode.node_info.keynum);
+		map(indexHandle, &indexScan->currentNode, target);
+		int index = upper_bound(indexHandle, &indexScan->currentNode, key, 0, indexScan->currentNode.node_info.keynum);
 
-		if (compOp == NEqual)
+		if (index == indexScan->currentNode.node_info.keynum)
 		{
-			/*在不等于操作中，扫描的序列实际被属性值相等的部分分割为两个序列，因此需要额外保存第二段序列的初始位置*/
-			indexScan->pnNext = indexHandle->fileHeader.first_leaf;
+			/*如果索引为节点的结尾，则定位到下一节点的开始位置*/
+			indexScan->pnNext = indexScan->currentNode.node_info.next;
 			indexScan->ridIx = 0;
-			map(indexHandle, &indexScan->currentNode, indexScan->pnNext);
 
-			if (index == targetNode.node_info.keynum)
-			{
-				/*如果索引为节点的结尾，则定位到下一节点的开始位置*/
-				indexScan->pnSkip = targetNode.node_info.next;
-				indexScan->ridIxSkip = 0;
-			}
-			else
-			{
-				indexScan->pnSkip = target;
-				indexScan->ridIxSkip = index;
-			}
+			if (indexScan->pnNext != 0)
+				map(indexHandle, &indexScan->currentNode, indexScan->pnNext);
 		}
 		else
 		{
-			if (index == targetNode.node_info.keynum)
-			{
-				/*如果索引为节点的结尾，则定位到下一节点的开始位置*/
-				indexScan->pnNext = targetNode.node_info.next;
-				indexScan->ridIx = 0;
-
-				if (indexScan->pnNext != 0)
-					map(indexHandle, &indexScan->currentNode, indexScan->pnNext);
-			}
-			else
-			{
-				indexScan->pnNext = target;
-				indexScan->ridIx = index;
-				indexScan->currentNode = targetNode;
-			}
+			indexScan->pnNext = target;
+			indexScan->ridIx = index;
 		}
 
 		free(key);
@@ -995,7 +1010,7 @@ RC IX_GetNextEntry(IX_IndexScan *indexScan,RID * rid){
 		if (index == curNode->node_info.keynum)
 		{
 			indexScan->pnNext = curNode->node_info.next;
-			index = 0;
+			indexScan->ridIx = 0;
 
 			if (indexScan->pnNext != 0)
 				map(indexHandle, curNode, indexScan->pnNext);
@@ -1014,7 +1029,9 @@ RC IX_GetNextEntry(IX_IndexScan *indexScan,RID * rid){
 		if (compOp == EQual)
 		{
 			if (attr_equal(indexHandle, indexScan->value, getKey(indexHandle, curNode, index)))
+			{
 				*rid = curNode->node_info.rids[index];
+			}
 			else
 				eof = true;
 		}
@@ -1049,7 +1066,7 @@ RC IX_GetNextEntry(IX_IndexScan *indexScan,RID * rid){
 			if (index == curNode->node_info.keynum)
 			{
 				indexScan->pnNext = curNode->node_info.next;
-				index = 0;
+				indexScan->ridIx = 0;
 
 				if (indexScan->pnNext != 0)
 					map(indexHandle, curNode, indexScan->pnNext);
@@ -1372,15 +1389,41 @@ void setTestMode(bool testMode)
 	TEST_MODE = testMode;
 }
 
+RC directOpenIndexScan(IX_IndexScan* indexScan, IX_IndexHandle* indexHandle, CompOp compOp, char* value)
+{
+	if (!indexHandle->bOpen)
+		return FAIL;
+
+	indexScan->bOpen = true;
+	indexScan->compOp = compOp;
+	map(indexHandle, &indexScan->currentNode, indexHandle->fileHeader.first_leaf);
+	indexScan->indexHandle = indexHandle;
+	indexScan->pnNext = indexHandle->fileHeader.first_leaf;
+	indexScan->ridIx = 0;
+	indexScan->value = (char*)malloc(indexHandle->fileHeader.attrLength);
+	if(indexScan->value!=NULL)
+		memcpy(indexScan->value, value, indexHandle->fileHeader.attrLength);
+
+	return SUCCESS;
+}
+
+RC directGetNextEntry(IX_IndexScan* indexScan, RID* rid)
+{
+	return SUCCESS;
+}
+
 void printTreeInfo(IX_IndexHandle* indexHandle)
 {
 	printf("Tree height: %d\n", indexHandle->fileHeader.height);
+	printf("Tree order: %d\n", indexHandle->fileHeader.order);
 	printf("Tree first leaf page: %u\n", indexHandle->fileHeader.first_leaf);
 	printf("Tree root page: %u\n", indexHandle->fileHeader.rootPage);
+	printf("Tree node num: %d\n", indexHandle->fileHandle.pFileSubHeader->nAllocatedPages - 1);
 }
 
 void printNode(IX_IndexHandle* indexHandle, IX_DataNode* dataNode)
 {
 	for (int i = 0; i < dataNode->node_info.keynum; ++i)
-		printf("%d ", *((int*)getKey(indexHandle, dataNode, i)));
+		printf("(%d, [%d, %d]) ", *((int*)getKey(indexHandle, dataNode, i)), 
+			getRID(dataNode, i)->pageNum, getRID(dataNode, i)->slotNum);
 }
