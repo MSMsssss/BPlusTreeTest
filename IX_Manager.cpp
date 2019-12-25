@@ -2,7 +2,7 @@
 #include <string.h>
 #pragma warning(disable : 4996)
 
-const bool TEST_MODE = true;
+bool TEST_MODE = true;
 const int MAX_FILE_NAME_LEN = 128;
 
 inline int halfOrder(int order)
@@ -1085,7 +1085,9 @@ RC CreateIndex(const char* _fileName, AttrType attrType, int attrLength)
 	strcpy(fileName, _fileName);
 
 	/*为索引创建分页文件,并打开*/
-	CreateFile(fileName);
+	if (CreateFile(fileName) != SUCCESS)
+		return FAIL;
+
 	PF_FileHandle fileHandle;
 	openFile(fileName, &fileHandle);
 
@@ -1190,6 +1192,9 @@ RC InsertEntry(IX_IndexHandle* indexHandle, void* pData, const RID* rid)
 			leafPageNum = search_leaf(indexHandle, key);
 		map(indexHandle, &leafNode, leafPageNum);
 
+		int index = lower_bound(indexHandle, &leafNode, key, 0, leafNode.node_info.keynum);
+		if (index != leafNode.node_info.keynum && key_equal(indexHandle, getKey(indexHandle, &leafNode, index), key))
+			return FAIL; //重复关键字
 
 		if (leafNode.node_info.keynum == indexHandle->fileHeader.order)
 		{
@@ -1314,23 +1319,25 @@ RC DeleteEntry(IX_IndexHandle* indexHandle, void* pData, const RID* rid)
 				/*与左侧兄弟合并*/
 				if (where == parentNode.node_info.keynum - 1)
 				{
-					IX_DataNode brotherNode;
-					map(indexHandle, &brotherNode, targetNode.node_info.prev);
-					memcpy(index_key, getKey(indexHandle, &brotherNode, 0), indexHandle->fileHeader.keyLength);
+					IX_DataNode* brotherNode = (IX_DataNode*)malloc(sizeof(IX_DataNode));
+					map(indexHandle, brotherNode, targetNode.node_info.prev);
+					memcpy(index_key, getKey(indexHandle, brotherNode, 0), indexHandle->fileHeader.keyLength);
 
-					merge_node(indexHandle, &brotherNode, &targetNode);
-					remove_node(indexHandle, &brotherNode, &targetNode);
-					unmap(indexHandle, &brotherNode, targetNode.node_info.prev);
+					merge_node(indexHandle, brotherNode, &targetNode);
+					remove_node(indexHandle, brotherNode, &targetNode);
+					unmap(indexHandle, brotherNode, targetNode.node_info.prev);
+					free(brotherNode);
 				}
 				else /*与右侧兄弟合并*/
 				{
-					IX_DataNode brotherNode;
-					map(indexHandle, &brotherNode, targetNode.node_info.next);
+					IX_DataNode* brotherNode = (IX_DataNode*)malloc(sizeof(IX_DataNode));
+					map(indexHandle, brotherNode, targetNode.node_info.next);
 					memcpy(index_key, getKey(indexHandle, &targetNode, 0), indexHandle->fileHeader.keyLength);
 
-					merge_node(indexHandle, &targetNode, &brotherNode);
-					remove_node(indexHandle, &targetNode, &brotherNode);
+					merge_node(indexHandle, &targetNode, brotherNode);
+					remove_node(indexHandle, &targetNode, brotherNode);
 					unmap(indexHandle, &targetNode, target);
+					free(brotherNode);
 				}
 
 				remove_from_index(indexHandle, parent, &parentNode, index_key);
@@ -1358,6 +1365,18 @@ void printList(IX_IndexHandle* indexHandle)
 		printf("\n");
 		leaf = leafNode.node_info.next;
 	}
+}
+
+void setTestMode(bool testMode)
+{
+	TEST_MODE = testMode;
+}
+
+void printTreeInfo(IX_IndexHandle* indexHandle)
+{
+	printf("Tree height: %d\n", indexHandle->fileHeader.height);
+	printf("Tree first leaf page: %u\n", indexHandle->fileHeader.first_leaf);
+	printf("Tree root page: %u\n", indexHandle->fileHeader.rootPage);
 }
 
 void printNode(IX_IndexHandle* indexHandle, IX_DataNode* dataNode)
