@@ -270,9 +270,9 @@ void benchmark()
 	const char* file2 = "test2.index";
 
 	setTestMode(true);
-	delete_int_test("test3.index", false, 1, 1001, 2, 10);
-	insert_int_test2("test3.index", false, 1, 1001, 1, 3);
-	printAllLeaf("test3.index");
+	//delete_int_test("test3.index", false, 1, 1001, 2, 10);
+	insert_int_test2("test3.index", false, 1, 1001, 3, 5);
+	//printAllLeaf("test3.index");
 
 	//≤È—Ø≤‚ ‘
 	//setTestMode(false);
@@ -311,6 +311,10 @@ void benchmark()
 int main()
 {
 	benchmark();
+	Tree index;
+	char fileName[128] = "test3.index";
+	GetIndexTree(fileName, &index);
+	printMemList(&index);
 
 	return 0;
 }

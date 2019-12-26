@@ -5,8 +5,6 @@
 bool TEST_MODE = false;
 const int MAX_FILE_NAME_LEN = 128;
 
-
-
 inline int halfOrder(int order)
 {
 	return order / 2;
@@ -519,6 +517,7 @@ void insert_index(IX_IndexHandle* indexHandle, PageNum target, const char* key, 
 		newRoot.node_info.rids[0].pageNum = old;
 		newRoot.node_info.rids[1].pageNum = after;
 		newRoot.node_info.keynum = 2;
+		newRoot.node_info.is_leaf = 0;
 
 		/*分裂根节点，创建新的根节点*/
 		PF_PageHandle newRootHandle;
@@ -851,6 +850,80 @@ void remove_from_index(IX_IndexHandle* indexHandle, PageNum target, IX_DataNode*
 	free(index_key);
 }
 
+/**/
+Tree_Node* createTree(IX_IndexHandle* indexHandle, PageNum root, Tree_Node* parent, Tree_Node* sibling)
+{
+	IX_DataNode dataNode;
+	map(indexHandle, &dataNode, root);
+
+	if (dataNode.node_info.is_leaf == 1)
+	{
+		Tree_Node* rootNode = (Tree_Node*)malloc(sizeof(Tree_Node));
+		if (rootNode == NULL)
+			return NULL;
+
+		rootNode->keyNum = dataNode.node_info.keynum;
+		rootNode->keys = (char**)malloc(rootNode->keyNum * sizeof(char*));
+		rootNode->parent = parent;
+		rootNode->sibling = sibling;
+		rootNode->firstChild = NULL;
+
+		if (rootNode->keys == NULL)
+			return NULL;
+
+		for (int i = 0; i < rootNode->keyNum; ++i)
+		{
+			rootNode->keys[i] = (char*)malloc(indexHandle->fileHeader.attrLength);
+			if (rootNode->keys[i] == NULL)
+				return NULL;
+
+			memcpy(rootNode->keys[i], getKey(indexHandle, &dataNode, i), indexHandle->fileHeader.attrLength);
+		}
+
+		return rootNode;
+	}
+	else
+	{
+		Tree_Node* rootNode = (Tree_Node*)malloc(sizeof(Tree_Node));
+		if (rootNode == NULL)
+			return NULL;
+
+		rootNode->keyNum = dataNode.node_info.keynum;
+		rootNode->keys = (char**)malloc(rootNode->keyNum * sizeof(char*));
+		rootNode->parent = parent;
+		rootNode->sibling = sibling;
+		rootNode->firstChild = NULL;
+
+		if (rootNode->keys == NULL)
+			return NULL;
+
+		for (int i = 0; i < rootNode->keyNum; ++i)
+		{
+			rootNode->keys[i] = (char*)malloc(indexHandle->fileHeader.attrLength);
+			if (rootNode->keys[i] == NULL)
+				return NULL;
+
+			memcpy(rootNode->keys[i], getKey(indexHandle, &dataNode, i), indexHandle->fileHeader.attrLength);
+		}
+
+		Tree_Node* son_sibling;
+		if (rootNode->sibling != NULL)
+			son_sibling = rootNode->sibling->firstChild;
+		else
+			son_sibling = NULL;
+
+		for (int i = rootNode->keyNum - 1; i >= 0; --i)
+		{
+			son_sibling = createTree(indexHandle, dataNode.node_info.rids[i].pageNum, rootNode, son_sibling);
+			if (son_sibling == NULL)
+				return NULL;
+		}
+
+		rootNode->firstChild = son_sibling;
+		return rootNode;
+	}
+}
+
 RC OpenIndexScan(IX_IndexScan *indexScan,IX_IndexHandle *indexHandle,CompOp compOp,char *value){	
 	if (!indexHandle->bOpen)
 		return FAIL;
@@ -1092,10 +1165,18 @@ RC CloseIndexScan(IX_IndexScan *indexScan){
 	return SUCCESS;
 }
 
-RC GetIndexTree(char *fileName, Tree *index){
+RC GetIndexTree(char *fileName, Tree *index)
+{
+	IX_IndexHandle indexHandle;
+	if (OpenIndex(fileName, &indexHandle) != SUCCESS)
+		return FAIL;
 
+	index->attrLength = indexHandle.fileHeader.attrLength;
+	index->attrType = indexHandle.fileHeader.attrType;
+	index->order = indexHandle.fileHeader.order;
+	index->root = createTree(&indexHandle, indexHandle.fileHeader.rootPage, NULL, NULL);
 
-
+	CloseIndex(&indexHandle);
 	return SUCCESS;
 }
 
@@ -1429,4 +1510,28 @@ void printNode(IX_IndexHandle* indexHandle, IX_DataNode* dataNode)
 	for (int i = 0; i < dataNode->node_info.keynum; ++i)
 		printf("(%d, [%d, %d]) ", *((int*)getKey(indexHandle, dataNode, i)), 
 			getRID(dataNode, i)->pageNum, getRID(dataNode, i)->slotNum);
+}
+
+void printMemNode(Tree* index, Tree_Node* node)
+{
+	for (int i = 0; i < node->keyNum; ++i)
+	{
+		printf("%d ", *((int*)node->keys[i]));
+	}
+}
+
+void printMemList(Tree* index)
+{
+	Tree_Node* node = index->root;
+	while (node->firstChild != NULL)
+	{
+		node = node->firstChild;
+	}
+
+	while (node != NULL)
+	{
+		printMemNode(index, node);
+		printf("\n");
+		node = node->sibling;
+	}
 }
