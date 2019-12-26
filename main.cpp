@@ -3,6 +3,11 @@
 #include "IX_Manager.h"
 #pragma warning(disable : 4996)
 
+void f()
+{
+
+}
+
 void next()
 {
 	system("pause");
@@ -204,26 +209,27 @@ void search_int_test2(const char* fileName, bool deleteFile, int begin, int end,
 	printf("search int test2 done\n\n\n");
 }
 
-void delete_int_test(const char* fileName, bool deleteFile)
+void delete_int_test(const char* fileName, bool deleteFile, int begin, int end, int interval, int num)
 {
 	char command[128];
 	sprintf(command, "del %s", fileName);
 
-	insert_int_test2(fileName, false, 1, 2001, 2, 3);
+	insert_int_test2(fileName, false, begin, end, interval, num);
 
 	IX_IndexHandle indexHandle;
 	if (OpenIndex(fileName, &indexHandle) == SUCCESS)
 	{
-		for (int begin = 1; begin < 1001; begin += 2)
+		for (int _begin = begin; _begin < end; _begin += interval)
 		{
-			for (int i = 1; i <= 2; ++i)
+			for (int i = 1; i <= num; ++i)
 			{
 				RID rid;
-				if (DeleteEntry(&indexHandle, &begin, initRid(&rid, begin, begin + i)) != SUCCESS)
+				if (DeleteEntry(&indexHandle, &_begin, initRid(&rid, _begin, _begin + i)) != SUCCESS)
 					printf("delete fail!\n");
 			}
 		}
 
+		printf("叶节点列表：\n");
 		printList(&indexHandle);
 		printTreeInfo(&indexHandle);
 		CloseIndex(&indexHandle);
@@ -238,7 +244,8 @@ void benchmark()
 	const char* file1 = "test1.index";
 	const char* file2 = "test2.index";
 
-	delete_int_test("test3.index", true);
+	setTestMode(true);
+	delete_int_test("test3.index", true, 1, 1001, 2, 10);
 
 	//查询测试
 	//setTestMode(false);

@@ -244,7 +244,8 @@ RC map(IX_IndexHandle* indexHandle, IX_DataNode* dataNode, PageNum pageNum)
 		return FAIL;
 
 	PF_PageHandle pageHandle;
-	GetThisPage(&indexHandle->fileHandle, pageNum, &pageHandle);
+	if (GetThisPage(&indexHandle->fileHandle, pageNum, &pageHandle) != SUCCESS)
+		return FAIL;
 
 	char* pData;
 	GetData(&pageHandle, &pData);
@@ -821,6 +822,7 @@ void remove_from_index(IX_IndexHandle* indexHandle, PageNum target, IX_DataNode*
 				IX_DataNode nextNode;
 				map(indexHandle, &nextNode, next);
 
+				reset_children_parent(indexHandle, &nextNode, 0, nextNode.node_info.keynum, target);
 				merge_node(indexHandle, targetNode, &nextNode);
 				remove_node(indexHandle, targetNode, &nextNode);
 				unmap(indexHandle, targetNode, target);
@@ -832,6 +834,7 @@ void remove_from_index(IX_IndexHandle* indexHandle, PageNum target, IX_DataNode*
 				map(indexHandle, &prevNode, prev);
 				memcpy(index_key, getKey(indexHandle, &prevNode, 0), indexHandle->fileHeader.keyLength);
 
+				reset_children_parent(indexHandle, targetNode, 0, targetNode->node_info.keynum, prev);
 				merge_node(indexHandle, &prevNode, targetNode);
 				remove_node(indexHandle, &prevNode, targetNode);
 				unmap(indexHandle, &prevNode, prev);
