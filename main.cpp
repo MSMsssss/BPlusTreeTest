@@ -24,6 +24,32 @@ void printAllLeaf(const char* fileName)
 	}
 }
 
+void insert_char_test1(const char* fileName, bool deleteFile, int begin, int end, int interval)
+{
+	char command[128];
+	sprintf(command, "del %s", fileName);
+
+	if (CreateIndex(fileName, chars, 16) != SUCCESS)
+	{
+		printf("索引创建失败！\n");
+		return;
+	}
+
+	IX_IndexHandle indexHandle;
+	if (OpenIndex(fileName, &indexHandle) == SUCCESS)
+	{
+		
+
+		printTreeInfo(&indexHandle);
+		CloseIndex(&indexHandle);
+	}
+
+	if (deleteFile)
+		system(command);
+
+	printf("insert char test1 done\n\n\n");
+}
+
 // 不重复属性值插入测试,attr:int
 void insert_int_test1(const char* fileName, bool deleteFile, int begin, int end, int interval)
 {
@@ -66,7 +92,6 @@ void insert_int_test2(const char* fileName, bool deleteFile, int _begin, int _en
 	if (CreateIndex(fileName, ints, sizeof(int)) != SUCCESS)
 	{
 		printf("索引创建失败！\n");
-		return;
 	}
 
 	IX_IndexHandle indexHandle;
@@ -221,7 +246,7 @@ void delete_int_test(const char* fileName, bool deleteFile, int begin, int end, 
 	{
 		for (int _begin = begin; _begin < end; _begin += interval)
 		{
-			for (int i = 1; i <= num; ++i)
+			for (int i = 1; i <= num - 2; ++i)
 			{
 				RID rid;
 				if (DeleteEntry(&indexHandle, &_begin, initRid(&rid, _begin, _begin + i)) != SUCCESS)
@@ -245,7 +270,9 @@ void benchmark()
 	const char* file2 = "test2.index";
 
 	setTestMode(true);
-	delete_int_test("test3.index", true, 1, 1001, 2, 10);
+	delete_int_test("test3.index", false, 1, 1001, 2, 10);
+	insert_int_test2("test3.index", false, 1, 1001, 1, 3);
+	printAllLeaf("test3.index");
 
 	//查询测试
 	//setTestMode(false);

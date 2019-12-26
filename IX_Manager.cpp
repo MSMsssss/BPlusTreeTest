@@ -2,7 +2,7 @@
 #include <string.h>
 #pragma warning(disable : 4996)
 
-bool TEST_MODE = true;
+bool TEST_MODE = false;
 const int MAX_FILE_NAME_LEN = 128;
 
 
