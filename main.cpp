@@ -24,12 +24,13 @@ void printAllLeaf(const char* fileName)
 	}
 }
 
-void insert_char_test1(const char* fileName, bool deleteFile, int begin, int end, int interval)
+void insert_char_test1(const char* fileName, bool deleteFile, int charLength, int _begin, int _end, int num, int interval)
 {
+
 	char command[128];
 	sprintf(command, "del %s", fileName);
 
-	if (CreateIndex(fileName, chars, 16) != SUCCESS)
+	if (CreateIndex(fileName, chars, charLength) != SUCCESS)
 	{
 		printf("索引创建失败！\n");
 		return;
@@ -38,10 +39,41 @@ void insert_char_test1(const char* fileName, bool deleteFile, int begin, int end
 	IX_IndexHandle indexHandle;
 	if (OpenIndex(fileName, &indexHandle) == SUCCESS)
 	{
-		
+		char* buffer = (char*)malloc(charLength);
+
+		for (int begin = _begin; begin < _end; begin += interval)
+		{
+			RID rid;
+
+			for (int i = 1; i <= num - num / 2; ++i)
+			{
+				sprintf(buffer, "%d", begin);
+				if (InsertEntry(&indexHandle, buffer, initRid(&rid, begin, begin + i + num / 2)) != SUCCESS)
+					printf("key: %d insert fail\n", begin);
+			}
+
+			//if (InsertEntry(&indexHandle, &begin, initRid(&rid, begin, begin + 1)) != SUCCESS)
+			//	printf("key: %d insert fail\n", begin);
+		}
+
+		for (int begin = _begin; begin < _end; begin += interval)
+		{
+			RID rid;
+
+			for (int i = 1; i <= num / 2; ++i)
+			{
+				sprintf(buffer, "%d", begin);
+				if (InsertEntry(&indexHandle, buffer, initRid(&rid, begin, begin + i)) != SUCCESS)
+					printf("key: %d insert fail\n", begin);
+			}
+
+			//if (InsertEntry(&indexHandle, &begin, initRid(&rid, begin, begin + 1)) != SUCCESS)
+			//	printf("key: %d insert fail\n", begin);
+		}
 
 		printTreeInfo(&indexHandle);
 		CloseIndex(&indexHandle);
+		free(buffer);
 	}
 
 	if (deleteFile)
@@ -269,9 +301,9 @@ void benchmark()
 	const char* file1 = "test1.index";
 	const char* file2 = "test2.index";
 
-	setTestMode(true);
+	setTestMode(false);
 	//delete_int_test("test3.index", false, 1, 1001, 2, 10);
-	insert_int_test2("test3.index", false, 1, 1001, 3, 5);
+	insert_char_test1("test3.index", false, 16, 1, 1000000, 3, 100);
 	//printAllLeaf("test3.index");
 
 	//查询测试

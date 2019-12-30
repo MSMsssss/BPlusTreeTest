@@ -1516,7 +1516,14 @@ void printMemNode(Tree* index, Tree_Node* node)
 {
 	for (int i = 0; i < node->keyNum; ++i)
 	{
-		printf("%d ", *((int*)node->keys[i]));
+		if (index->attrType == ints)
+			printf("%d ", *((int*)node->keys[i]));
+		else if (index->attrType == chars)
+			printf("%s ", node->keys[i]);
+		else if (index->attrType == floats)
+			printf("%.2f ", *((float*)node->keys[i]));
+		else
+			printf("type error");
 	}
 }
 
