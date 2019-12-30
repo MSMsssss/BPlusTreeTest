@@ -1542,3 +1542,31 @@ void printMemList(Tree* index)
 		node = node->sibling;
 	}
 }
+
+bool node_legal(Tree* index, Tree_Node* node)
+{
+	if(node == index->root)
+		return node->keyNum <= index->order && node->keyNum >= 2;
+	else
+		return node->keyNum <= index->order && node->keyNum >= halfOrder(index->order);
+}
+
+bool index_legal(Tree* index)
+{
+	Tree_Node* first = index->root;
+	while (first != NULL)
+	{
+		Tree_Node* begin = first;
+		while (begin != NULL)
+		{
+			if (!node_legal(index, begin))
+				return false;
+
+			begin = begin->sibling;
+		}
+
+		first = first->firstChild;
+	}
+
+	return true;
+}

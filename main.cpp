@@ -47,7 +47,7 @@ void insert_char_test1(const char* fileName, bool deleteFile, int charLength, in
 
 			for (int i = 1; i <= num - num / 2; ++i)
 			{
-				sprintf(buffer, "%d", begin);
+				sprintf(buffer, "%x", begin);
 				if (InsertEntry(&indexHandle, buffer, initRid(&rid, begin, begin + i + num / 2)) != SUCCESS)
 					printf("key: %d insert fail\n", begin);
 			}
@@ -62,7 +62,7 @@ void insert_char_test1(const char* fileName, bool deleteFile, int charLength, in
 
 			for (int i = 1; i <= num / 2; ++i)
 			{
-				sprintf(buffer, "%d", begin);
+				sprintf(buffer, "%x", begin);
 				if (InsertEntry(&indexHandle, buffer, initRid(&rid, begin, begin + i)) != SUCCESS)
 					printf("key: %d insert fail\n", begin);
 			}
@@ -296,14 +296,58 @@ void delete_int_test(const char* fileName, bool deleteFile, int begin, int end, 
 		system(command);
 }
 
+void delete_char_test(const char* fileName, bool deleteFile, int charLength, int _begin, int _end, int num, int interval, int delete_num)
+{
+	char command[128];
+	sprintf(command, "del %s", fileName);
+
+	insert_char_test1(fileName, false, charLength, _begin, _end, num, interval);
+
+	IX_IndexHandle indexHandle;
+	if (OpenIndex(fileName, &indexHandle) == SUCCESS)
+	{
+		char* buffer = (char*)malloc(charLength);
+		for (int begin = _begin; begin < _end; begin += interval)
+		{
+			for (int i = 1; i <= delete_num; ++i)
+			{
+				RID rid;
+				sprintf(buffer, "%x", begin);
+				if (DeleteEntry(&indexHandle, buffer, initRid(&rid, begin, begin + i)) != SUCCESS)
+					printf("delete fail!\n");
+			}
+		}
+
+		printf("叶节点列表：\n");
+		//printList(&indexHandle);
+		printTreeInfo(&indexHandle);
+		CloseIndex(&indexHandle);
+
+		Tree index;
+		char _fileName[128];
+		memcpy(_fileName, fileName, 128);
+		GetIndexTree(_fileName, &index);
+		printMemList(&index);
+		if (index_legal(&index))
+			printf("index is legal\n");
+		else
+			printf("index is not legal\n");
+
+		free(buffer);
+	}
+
+	if (deleteFile)
+		system(command);
+}
+
 void benchmark()
 {
 	const char* file1 = "test1.index";
 	const char* file2 = "test2.index";
 
-	setTestMode(false);
+	setTestMode(true);
 	//delete_int_test("test3.index", false, 1, 1001, 2, 10);
-	insert_char_test1("test3.index", false, 16, 1, 1000000, 3, 100);
+	delete_char_test("test3.index", true, 16, 1, 100000, 10, 100, 4);
 	//printAllLeaf("test3.index");
 
 	//查询测试
@@ -343,10 +387,6 @@ void benchmark()
 int main()
 {
 	benchmark();
-	Tree index;
-	char fileName[128] = "test3.index";
-	GetIndexTree(fileName, &index);
-	printMemList(&index);
 
 	return 0;
 }

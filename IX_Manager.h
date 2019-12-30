@@ -194,6 +194,8 @@ RC directOpenIndexScan(IX_IndexScan* indexScan, IX_IndexHandle* indexHandle, Com
 RC directGetNextEntry(IX_IndexScan* indexScan, RID* rid);
 void printMemNode(Tree* index, Tree_Node* node);
 void printMemList(Tree* index);
+bool node_legal(Tree* index, Tree_Node* node);
+bool index_legal(Tree* index);
 
 RC CreateIndex(const char * fileName,AttrType attrType,int attrLength);
 RC OpenIndex(const char *fileName,IX_IndexHandle *indexHandle);
