@@ -303,6 +303,16 @@ void delete_char_test(const char* fileName, bool deleteFile, int charLength, int
 
 	insert_char_test1(fileName, false, charLength, _begin, _end, num, interval);
 
+	Tree index;
+	char _fileName[128];
+	memcpy(_fileName, fileName, 128);
+	GetIndexTree(_fileName, &index);
+	printMemList(&index);
+	if (index_legal(&index))
+		printf("index is legal\n");
+	else
+		printf("index is not legal\n");
+
 	IX_IndexHandle indexHandle;
 	if (OpenIndex(fileName, &indexHandle) == SUCCESS)
 	{
@@ -345,41 +355,41 @@ void benchmark()
 	const char* file1 = "test1.index";
 	const char* file2 = "test2.index";
 
-	setTestMode(true);
+	//setTestMode(true);
 	//delete_int_test("test3.index", false, 1, 1001, 2, 10);
-	delete_char_test("test3.index", true, 16, 1, 100000, 10, 100, 4);
+	//delete_char_test("test3.index", true, 16, 1, 100000, 10, 100, 8);
 	//printAllLeaf("test3.index");
 
 	//≤È—Ø≤‚ ‘
-	//setTestMode(false);
-	//search_int_test2(file1, false, 1, 100001, 2, 20, EQual);
-	//printf("= test\n");
-	//next();
+	setTestMode(false);
+	search_int_test2(file1, false, 1, 100001, 2, 20, EQual);
+	printf("= test\n");
+	next();
 
-	//setTestMode(true);
-	//search_int_test1(file2, false, 1, 1001, 2, 3, LessT);
-	//printf("< test\n");
-	//next();
+	setTestMode(false);
+	search_int_test1(file2, false, 1, 1001, 2, 3, LessT);
+	printf("< test\n");
+	next();
 
-	//search_int_test1(file2, false, 1, 1001, 2, 3, LEqual);
-	//printf("<= test\n");
-	//next();
+	search_int_test1(file2, false, 1, 1001, 2, 3, LEqual);
+	printf("<= test\n");
+	next();
 
-	//search_int_test1(file2, false, 1, 1001, 2, 3, NO_OP);
-	//printf("no op test\n");
-	//next();
+	search_int_test1(file2, false, 1, 1001, 2, 3, NO_OP);
+	printf("no op test\n");
+	next();
 
-	//search_int_test1(file2, false, 1, 1001, 2, 3, GreatT);
-	//printf("> test\n");
-	//next();
+	search_int_test1(file2, false, 1, 1001, 2, 3, GreatT);
+	printf("> test\n");
+	next();
 
-	//search_int_test1(file2, false, 1, 1001, 2, 3, GEqual);
-	//printf(">= test\n");
-	//next();
+	search_int_test1(file2, false, 1, 1001, 2, 3, GEqual);
+	printf(">= test\n");
+	next();
 
-	//search_int_test1(file2, false, 1, 1001, 2, 3, NEqual);
-	//printf("<> test\n");
-	//next();
+	search_int_test1(file2, true, 1, 1001, 2, 3, NEqual);
+	printf("<> test\n");
+	next();
 
 
 }
